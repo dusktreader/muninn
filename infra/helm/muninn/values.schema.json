@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/schema#",
+  "type": "object",
+  "required": ["global", "environment", "postgresql", "nats", "minio", "keycloak", "provider", "auth"],
+  "properties": {
+    "global": {
+      "type": "object",
+      "required": ["publicHostname"],
+      "properties": {
+        "publicHostname": {
+          "type": "string",
+          "pattern": "^$|^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$"
+        }
+      }
+    },
+    "environment": {"enum": ["production", "local"]},
+    "auth": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {"mode": {"enum": ["oidc", "local"]}}
+    },
+    "postgresql": {
+      "type": "object",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {"const": true},
+        "image": {"const": "postgres:18"},
+        "endpoint": {"not": {}}
+      }
+    },
+    "nats": {
+      "type": "object",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {"const": true},
+        "endpoint": {"not": {}},
+        "host": {"not": {}},
+        "url": {"not": {}}
+      }
+    },
+    "minio": {
+      "type": "object",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {"const": true},
+        "accessKey": {"type": "string"},
+        "secretKey": {"type": "string"},
+        "endpoint": {"not": {}},
+        "host": {"not": {}},
+        "url": {"not": {}}
+      }
+    },
+    "keycloak": {
+      "type": "object",
+      "required": ["issuerUrl", "jwksUrl", "audience", "clientId"],
+      "properties": {
+        "issuerUrl": {"type": "string"},
+        "jwksUrl": {"type": "string"},
+        "audience": {"type": "string"},
+        "clientId": {"type": "string"}
+      }
+    },
+    "provider": {
+      "type": "object",
+      "required": ["mode", "apiBaseUrl", "llmBaseUrl", "apiKeySecret", "apiKeySecretKey", "transcriptionModel", "summaryModel"],
+      "properties": {
+        "mode": {"enum": ["assemblyai", "fake"]},
+        "apiBaseUrl": {"type": "string", "pattern": "^https://"},
+        "llmBaseUrl": {"type": "string", "pattern": "^https://"},
+        "apiKeySecret": {"type": "string", "minLength": 1},
+        "apiKeySecretKey": {"type": "string", "minLength": 1},
+        "transcriptionModel": {"type": "string", "minLength": 1},
+        "summaryModel": {"type": "string", "minLength": 1}
+      }
+    },
+    "qaDeployment": {"type": "boolean"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"auth": {"properties": {"mode": {"const": "local"}}, "required": ["mode"]}},
+        "required": ["auth"]
+      },
+      "then": {"properties": {"environment": {"const": "local"}}}
+    },
+    {
+      "if": {
+        "properties": {"auth": {"properties": {"mode": {"const": "oidc"}}, "required": ["mode"]}},
+        "required": ["auth"]
+      },
+      "then": {
+        "properties": {
+          "global": {"properties": {"publicHostname": {"minLength": 1}}},
+          "keycloak": {
+            "properties": {
+              "issuerUrl": {"minLength": 1, "pattern": "^https?://"},
+              "jwksUrl": {"minLength": 1, "pattern": "^https?://"},
+              "audience": {"minLength": 1},
+              "clientId": {"minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  ]
+}

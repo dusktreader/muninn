@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: muninn-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: muninn-api}
+  template:
+    metadata:
+      labels: {app: muninn-api}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+    spec:
+      initContainers:
+        - name: object-store-bucket
+          image: {{ .Values.api.image | quote }}
+          command: ["python", "-c", "from muninn.storage.service import get_object_store; get_object_store().ensure_bucket()"]
+          envFrom:
+            - configMapRef: {name: muninn-config}
+            - secretRef: {name: muninn-runtime}
+        - name: migrations
+          image: {{ .Values.api.image | quote }}
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef: {name: muninn-config}
+            - secretRef: {name: muninn-runtime}
+      containers:
+        - name: api
+          image: {{ .Values.api.image | quote }}
+          ports: [{name: http, containerPort: 5000}]
+          readinessProbe: {httpGet: {path: /readyz, port: http}}
+          livenessProbe: {httpGet: {path: /healthz, port: http}}
+          envFrom:
+            - configMapRef: {name: muninn-config}
+            - secretRef: {name: muninn-runtime}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: muninn-api
+spec:
+  type: ClusterIP
+  selector: {app: muninn-api}
+  ports: [{name: http, port: 5000, targetPort: http}]
+{{- range $name := list "job-manager" "worker" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: muninn-{{ $name }}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: muninn-{{ $name }}}}
+  template:
+    metadata: {labels: {app: muninn-{{ $name }}}}
+    spec:
+      containers:
+        - name: {{ $name }}
+          image: {{ if eq $name "job-manager" }}{{ $.Values.jobManager.image | quote }}{{ else }}{{ $.Values.workers.image | quote }}{{ end }}
+          command: [{{ if eq $name "job-manager" }}"muninn-job-manager"{{ else }}"muninn-worker"{{ end }}]
+          env:
+            - name: MUNINN_ENVIRONMENT
+              value: {{ $.Values.environment | quote }}
+            - name: MUNINN_DATABASE_URL
+              value: "postgresql+psycopg://muninn@muninn-postgresql:5432/muninn"
+            - name: MUNINN_NATS_URL
+              value: "nats://muninn-nats:4222"
+            {{- if eq $.Values.auth.mode "oidc" }}
+            - name: MUNINN_OIDC_ISSUER_URL
+              value: {{ required "keycloak.issuerUrl is required when auth.mode is oidc" $.Values.keycloak.issuerUrl | quote }}
+            - name: MUNINN_OIDC_JWKS_URL
+              value: {{ required "keycloak.jwksUrl is required when auth.mode is oidc" $.Values.keycloak.jwksUrl | quote }}
+            - name: MUNINN_OIDC_AUDIENCE
+              value: {{ required "keycloak.audience is required when auth.mode is oidc" $.Values.keycloak.audience | quote }}
+            - name: MUNINN_OIDC_CLIENT_ID
+              value: {{ required "keycloak.clientId is required when auth.mode is oidc" $.Values.keycloak.clientId | quote }}
+            {{- end }}
+            {{- if eq $name "job-manager" }}
+            - name: MUNINN_OBJECT_STORE_ENDPOINT
+              value: "http://muninn-minio:9000"
+            - name: MUNINN_OBJECT_STORE_BUCKET
+              value: "muninn"
+            - name: MUNINN_OBJECT_STORE_ACCESS_KEY
+              valueFrom: {secretKeyRef: {name: muninn-runtime, key: MUNINN_OBJECT_STORE_ACCESS_KEY}}
+            - name: MUNINN_OBJECT_STORE_SECRET_KEY
+              valueFrom: {secretKeyRef: {name: muninn-runtime, key: MUNINN_OBJECT_STORE_SECRET_KEY}}
+            {{- end }}
+            - name: MUNINN_PROVIDER_MODE
+              value: {{ $.Values.provider.mode | quote }}
+            - name: MUNINN_ASSEMBLYAI_API_BASE_URL
+              value: {{ $.Values.provider.apiBaseUrl | quote }}
+            - name: MUNINN_ASSEMBLYAI_LLM_BASE_URL
+              value: {{ $.Values.provider.llmBaseUrl | quote }}
+            - name: MUNINN_ASSEMBLYAI_TRANSCRIPTION_MODEL
+              value: {{ $.Values.provider.transcriptionModel | quote }}
+            - name: MUNINN_ASSEMBLYAI_SUMMARY_MODEL
+              value: {{ $.Values.provider.summaryModel | quote }}
+            {{- if and (eq $name "worker") (eq $.Values.provider.mode "assemblyai") }}
+            - name: MUNINN_ASSEMBLYAI_API_KEY
+              valueFrom: {secretKeyRef: {name: {{ $.Values.provider.apiKeySecret | quote }}, key: {{ $.Values.provider.apiKeySecretKey | quote }}}}
+            {{- end }}
+{{- end }}

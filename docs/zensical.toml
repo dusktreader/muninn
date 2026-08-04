@@ -1,0 +1,9 @@
+[project]
+site_name = "Muninn"
+site_description = "Personal conversation capture and context"
+
+[project.theme]
+variant = "modern"
+
+[project.docs]
+input = "source"

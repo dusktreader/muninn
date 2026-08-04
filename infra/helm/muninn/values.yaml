@@ -1,0 +1,41 @@
+global:
+  publicHostname: ""
+environment: production
+auth:
+  mode: oidc
+provider:
+  mode: assemblyai
+  apiBaseUrl: https://api.assemblyai.com
+  llmBaseUrl: https://llm-gateway.assemblyai.com/v1
+  apiKeySecret: muninn-assemblyai
+  apiKeySecretKey: api-key
+  transcriptionModel: universal-3-5-pro
+  summaryModel: gemma-4-31b
+  fake:
+    fixtureSet: ""
+    seed: ""
+qaDeployment: false
+postgresql:
+  image: postgres:18
+  enabled: true
+  authMethod: ""
+nats:
+  image: nats:2.10.26
+  enabled: true
+  storage: 20Gi
+minio:
+  image: minio/minio:RELEASE.2025-02-07T23-21-09Z
+  enabled: true
+  accessKey: ""
+  secretKey: ""
+keycloak:
+  issuerUrl: ""
+  jwksUrl: ""
+  audience: ""
+  clientId: muninn-web
+api:
+  image: muninn:latest
+jobManager:
+  image: muninn:latest
+workers:
+  image: muninn:latest
