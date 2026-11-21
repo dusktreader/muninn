@@ -2,5 +2,5 @@
 name = "muninn-docs"
 version = "0.1.0"
 description = "Muninn documentation"
-requires-python = ">=3.13"
+requires-python = "==3.15.0"
 dependencies = ["zensical>=0.0.1"]

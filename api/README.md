@@ -27,7 +27,7 @@ completion events; the job manager and worker processes are exposed as `muninn-j
 
 ## Local configuration
 
-Use Python 3.13 and `uv`. PostgreSQL is required for the API. Configure
+Use Python 3.15.0 and `uv`. PostgreSQL is required for the API. Configure
 these `MUNINN_` settings as needed for the local services:
 
 - `MUNINN_DATABASE_URL` for PostgreSQL.

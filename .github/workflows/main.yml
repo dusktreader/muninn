@@ -1,0 +1,200 @@
+name: QA on push
+run-name: qa-checks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Detect changed components
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      web: ${{ steps.filter.outputs.web }}
+      mobile: ${{ steps.filter.outputs.mobile }}
+      infra: ${{ steps.filter.outputs.infra }}
+      docs: ${{ steps.filter.outputs.docs }}
+      ci: ${{ steps.filter.outputs.ci }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Filter changed paths
+      id: filter
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          api:
+            - 'api/**'
+          web:
+            - 'web-ui/**'
+          mobile:
+            - 'mobile-ui/**'
+          infra:
+            - 'infra/**'
+          docs:
+            - 'docs/**'
+          ci:
+            - '.github/workflows/main.yml'
+            - 'Makefile'
+
+  api:
+    name: API (py${{ matrix.python-version }})
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ '3.15.0' ]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        enable-cache: true
+        cache-dependency-glob: api/uv.lock
+
+    - name: Sync dependencies from lockfile
+      working-directory: api
+      run: uv sync --locked --all-groups
+
+    - name: Run API quality checks
+      run: make -C api qa
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        files: ./.coverage.xml
+        token: ${{ secrets.CODECOV_TOKEN }}
+        flags: api
+      if: success() && hashFiles('.coverage.xml') != ''
+
+  web:
+    name: Web UI
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || needs.changes.outputs.ci == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Enable corepack (reads packageManager from web-ui/package.json)
+      run: corepack enable
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: pnpm
+        cache-dependency-path: web-ui/pnpm-lock.yaml
+
+    - name: Run web quality checks
+      run: make -C web-ui qa
+
+  mobile:
+    name: Mobile UI
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true' || needs.changes.outputs.ci == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '17'
+        cache: gradle
+
+    # Android SDK is preinstalled on ubuntu-latest runners.
+    # Instrumented tests (qa/instrumented) need an emulator and are not run here.
+    - name: Run mobile lint and unit tests
+      working-directory: mobile-ui
+      run: |
+        make qa/lint
+        make qa/test
+
+    - name: Upload lint report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: android-lint-report
+        path: mobile-ui/app/build/reports/lint-results-debug.html
+        if-no-files-found: ignore
+
+  infra:
+    name: Helm charts
+    needs: changes
+    if: needs.changes.outputs.infra == 'true' || needs.changes.outputs.ci == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v4
+      with:
+        version: v3.16.4
+
+    - name: Lint and render charts
+      working-directory: infra
+      run: make qa/lint
+
+  docs:
+    name: Docs build
+    needs: changes
+    if: needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        python-version: '3.15.0'
+        enable-cache: true
+        cache-dependency-glob: docs/pyproject.toml
+
+    - name: Build documentation
+      run: make -C docs build
+
+  qa-summary:
+    name: QA summary
+    needs: [ api, web, mobile, infra, docs ]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - name: Fail if any required job failed or was cancelled
+      run: |
+        results='${{ toJSON(needs) }}'
+        echo "$results" | jq -e 'to_entries | all(.value.result == "success" or .value.result == "skipped")' >/dev/null \
+          || { echo "One or more QA jobs failed:"; echo "$results"; exit 1; }

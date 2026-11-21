@@ -10,13 +10,7 @@ qa/full: qa/lint  ## Run the full set of quality checks
 
 qa/lint:  ## Lint the helm charts
 	helm lint helm/muninn
-	helm template muninn helm/muninn --values helm/muninn/values-homelab.yaml >/dev/null
-
-
-## ==== Deployment =====================================================================================================
-
-deploy: qa/lint  ## Deploy?
-	helm upgrade --install muninn helm/muninn --namespace muninn --create-namespace --values helm/muninn/values-homelab.yaml
+	helm template muninn helm/muninn >/dev/null
 
 
 ## ==== Helpers ========================================================================================================
@@ -40,7 +34,6 @@ help:  ## Show help message
 .ONESHELL:
 SHELL:=/bin/bash
 .PHONY: qa/full qa/lint \
-	deploy \
 	clean help
 
 

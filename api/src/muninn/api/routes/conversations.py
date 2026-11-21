@@ -15,6 +15,7 @@ import jwt
 from fastapi import APIRouter, Depends, File, Header, Query, Response, UploadFile, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import and_, select, text, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, aliased, sessionmaker
 from starlette.background import BackgroundTask
@@ -315,14 +316,17 @@ def acquire_playback_build_lock(db: Session, conversation_id: UUID, owner_subjec
             raise RecordingPlaybackError("Recording playback is busy")
         return
     if dialect == "sqlite":
-        result = db.execute(
-            update(Conversation)
-            .where(
-                Conversation.id == conversation_id,
-                Conversation.owner_subject == owner_subject,
-                Conversation.visibility == VisibilityState.ACTIVE,
-            )
-            .values(revision=Conversation.revision)
+        result = cast(
+            CursorResult[Any],
+            db.execute(
+                update(Conversation)
+                .where(
+                    Conversation.id == conversation_id,
+                    Conversation.owner_subject == owner_subject,
+                    Conversation.visibility == VisibilityState.ACTIVE,
+                )
+                .values(revision=Conversation.revision)
+            ),
         )
         if result.rowcount != 1:
             raise ResourceNotFoundError("Recording was not found")
@@ -1097,10 +1101,13 @@ def get_recording(
         raise ResourceNotFoundError("Recording was not found")
     claims: dict[str, Any] | None = None
     if grant is not None:
+        grant_secret = service_settings.artifact_grant_secret
+        if grant_secret is None:
+            raise ResourceNotFoundError("Recording was not found")
         try:
             claims = jwt.decode(
                 grant,
-                service_settings.artifact_grant_secret,
+                grant_secret,
                 algorithms=["HS256"],
                 audience="muninn-recording",
                 options={"require": ["artifact_key", "conversation_revision"]},

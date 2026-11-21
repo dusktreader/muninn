@@ -11,14 +11,12 @@ CHART = ROOT / "infra/helm/muninn"
 
 
 @pytest.mark.unit
-def test_production_values_use_postgresql_18_and_non_development_environment() -> None:
-    """Keep the homelab render on PostgreSQL 18 and out of the local shortcut profile."""
-    values = (CHART / "values-homelab.yaml").read_text()
+def test_chart_defaults_use_postgresql_18_and_non_development_environment() -> None:
+    """Keep the chart defaults on PostgreSQL 18 and out of the local shortcut profile."""
     defaults = (CHART / "values.yaml").read_text()
-    assert "environment: production" in values
-    assert "image: postgres:18" in values
+    assert "environment: prod" in defaults
+    assert "image: postgres:18" in defaults
     assert "summaryModel: gemma-4-31b" in defaults
-    assert "summaryModel: gemma-4-31b" in values
 
 
 @pytest.mark.unit
@@ -41,10 +39,10 @@ def test_api_imports_the_prefixed_service_configuration() -> None:
 
 
 @pytest.mark.unit
-def test_homelab_render_wires_production_api_configuration() -> None:
-    """Render the chart and prove API pods receive production-only settings."""
+def test_default_render_wires_production_api_configuration() -> None:
+    """Render chart defaults and verify API settings."""
     rendered = subprocess.run(
-        ["helm", "template", "muninn", str(CHART), "-f", str(CHART / "values-homelab.yaml")],
+        ["helm", "template", "muninn", str(CHART)],
         check=True,
         capture_output=True,
         text=True,
@@ -59,9 +57,9 @@ def test_homelab_render_wires_production_api_configuration() -> None:
         for document in rendered.split("---")
         if "kind: Deployment" in document and "name: muninn-job-manager" in document
     )
-    assert "MUNINN_ENVIRONMENT: \"production\"" in rendered
-    assert "MUNINN_DATABASE_URL: \"postgresql+psycopg://" in rendered
-    assert "MUNINN_OIDC_JWKS_URL: \"https://" in rendered
+    assert 'MUNINN_ENVIRONMENT: "prod"' in rendered
+    assert 'MUNINN_DATABASE_URL: "postgresql+psycopg://' in rendered
+    assert 'MUNINN_OIDC_JWKS_URL: "https://' in rendered
     assert 'MUNINN_ASSEMBLYAI_SUMMARY_MODEL: "gemma-4-31b"' in rendered
     assert "configMapRef: {name: muninn-config}" in api_document
     assert "checksum/config:" in api_document
@@ -71,3 +69,23 @@ def test_homelab_render_wires_production_api_configuration() -> None:
     assert "name: MUNINN_OBJECT_STORE_ACCESS_KEY" in manager_document
     assert "name: MUNINN_OBJECT_STORE_SECRET_KEY" in manager_document
     assert "sqlite" not in api_document.lower()
+
+
+@pytest.mark.unit
+def test_default_render_provisions_jetstream_topology_with_a_job() -> None:
+    """Render a hook Job that provisions the JetStream streams and Object Store bucket once per deploy."""
+    rendered = subprocess.run(
+        ["helm", "template", "muninn", str(CHART)],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    job_document = next(
+        document
+        for document in rendered.split("---")
+        if "kind: Job" in document and "name: muninn-jetstream-provision" in document
+    )
+    assert 'helm.sh/hook": pre-upgrade,post-install' in job_document
+    assert 'command: ["python", "-m", "muninn.queue.provision"]' in job_document
+    assert "configMapRef: {name: muninn-config}" in job_document
+    assert "secretRef: {name: muninn-runtime}" in job_document

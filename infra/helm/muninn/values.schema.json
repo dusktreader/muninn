@@ -13,7 +13,7 @@
         }
       }
     },
-    "environment": {"enum": ["production", "local"]},
+    "environment": {"enum": ["local", "dev", "qa", "staging", "prod"]},
     "auth": {
       "type": "object",
       "required": ["mode"],

@@ -1,6 +1,6 @@
 global:
-  publicHostname: ""
-environment: production
+  publicHostname: muninn.example.test
+environment: prod
 auth:
   mode: oidc
 provider:
@@ -29,9 +29,9 @@ minio:
   accessKey: ""
   secretKey: ""
 keycloak:
-  issuerUrl: ""
-  jwksUrl: ""
-  audience: ""
+  issuerUrl: https://keycloak.example.test/realms/muninn
+  jwksUrl: https://keycloak.example.test/realms/muninn/protocol/openid-connect/certs
+  audience: muninn-api
   clientId: muninn-web
 api:
   image: muninn:latest

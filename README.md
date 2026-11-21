@@ -14,7 +14,7 @@ Muninn is a self-hosted, AI assisted meeting note taker that records, transcribe
 
 ## Run locally
 
-Requires Python 3.13 and `uv`.
+Requires Python 3.15.0 and `uv`.
 
 ```shell
 make dev/up

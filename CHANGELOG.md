@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## Unreleased
+
+### Added
+
+- Add GitHub Actions workflows for QA, documentation deployment, and tagged
+  releases.
+- Add idempotent NATS JetStream and Object Store provisioning during Helm
+  deployments.
+
+### Changed
+
+- Update the API and documentation toolchains to Python 3.15 and refresh locked
+  dependencies.
+- Simplify Helm deployment around chart defaults, removing environment-specific
+  values profiles.
+- Add repository-wide dependency synchronization targets.
+
+### Fixed
+
+- Handle optional artifact grant secrets safely and preserve SQLite playback
+  lock row counts.
+
 ## v0.1.0 - 2026-11-20
 
 ### Added

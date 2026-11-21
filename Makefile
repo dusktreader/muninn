@@ -94,6 +94,21 @@ dev/logs:  ## Tail logs from all local Muninn pods (e.g. make dev/logs pod=api)
 	kubectl logs --namespace "$(DEVSPACE_NS)" --selector "$$selector" --all-containers=true --prefix=true --follow=true --ignore-errors=true --tail=30 --max-log-requests=10
 
 
+## ==== Dependencies ===================================================================================================
+
+sync: sync/api sync/docs sync/web  ## Sync dependencies in all subprojects from their lockfiles
+	@echo "All subproject dependencies synced!"
+
+sync/api:  ## Sync api Python dependencies from uv.lock
+	uv sync --locked --all-groups --directory api
+
+sync/docs:  ## Sync docs Python dependencies from uv.lock
+	uv sync --directory docs
+
+sync/web:  ## Install web-ui JavaScript dependencies from pnpm-lock.yaml
+	$(MAKE) -C web-ui install
+
+
 ## ==== Subfolder Dispatch =============================================================================================
 
 api/%:  ## Dispatch to api Makefile
@@ -133,6 +148,7 @@ help:  ## Show help message
 .ONESHELL:
 SHELL:=/bin/bash
 .PHONY: qa/full qa/api qa/web qa/mobile \
+	sync sync/api sync/docs sync/web \
 	dev/up dev/down dev/secrets dev/keycloak-setup dev/logs \
 	infra mobile-ui\
 	clean help

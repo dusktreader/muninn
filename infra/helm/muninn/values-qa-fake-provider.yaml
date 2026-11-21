@@ -1,6 +1,0 @@
-qaDeployment: true
-provider:
-  mode: fake
-  fake:
-    fixtureSet: deployment-v1
-    seed: muninn-qa
