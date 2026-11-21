@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: muninn-keycloak
+  labels:
+    app: muninn-keycloak
+spec:
+  selector:
+    app: muninn-keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: muninn-keycloak
+  labels:
+    app: muninn-keycloak
+spec:
+  serviceName: muninn-keycloak
+  replicas: 1
+  selector:
+    matchLabels:
+      app: muninn-keycloak
+  template:
+    metadata:
+      labels:
+        app: muninn-keycloak
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.0
+          args:
+            - start-dev
+          env:
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: muninn-keycloak-admin
+                  key: username
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: muninn-keycloak-admin
+                  key: password
+            - name: KC_DB
+              value: dev-file
+            - name: KC_HOSTNAME
+              value: http://localhost:8180
+            - name: KC_HOSTNAME_STRICT
+              value: "false"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9000
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: management
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /opt/keycloak/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi

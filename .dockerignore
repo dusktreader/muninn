@@ -1,0 +1,12 @@
+.git
+.worktrees
+.artifacts
+web-ui/node_modules
+web-ui/dist
+mobile-ui/.gradle
+mobile-ui/build
+api/.venv
+api/.pytest_cache
+api/.ruff_cache
+api/.coverage
+api/.coverage.xml

@@ -1,0 +1,128 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: muninn-postgresql
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: {storage: 20Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: muninn-postgresql
+spec:
+  selector: {app: muninn-postgresql}
+  ports: [{port: 5432, targetPort: 5432}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: muninn-postgresql
+spec:
+  serviceName: muninn-postgresql
+  replicas: 1
+  selector: {matchLabels: {app: muninn-postgresql}}
+  template:
+    metadata: {labels: {app: muninn-postgresql}}
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgresql.image | quote }}
+          env:
+            - name: POSTGRES_DB
+              value: muninn
+            - name: POSTGRES_USER
+              value: muninn
+            {{- if .Values.postgresql.authMethod }}
+            - name: POSTGRES_HOST_AUTH_METHOD
+              value: {{ .Values.postgresql.authMethod | quote }}
+            {{- end }}
+          ports: [{containerPort: 5432}]
+          volumeMounts: [{name: data, mountPath: /var/lib/postgresql}]
+          readinessProbe: {tcpSocket: {port: 5432}}
+      volumes: [{name: data, persistentVolumeClaim: {claimName: muninn-postgresql}}]
+{{- end }}
+---
+{{- if .Values.minio.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: muninn-minio
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: {storage: 50Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: muninn-minio
+spec:
+  selector: {app: muninn-minio}
+  ports: [{name: api, port: 9000}, {name: console, port: 9001}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: muninn-minio
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: muninn-minio}}
+  template:
+    metadata:
+      labels: {app: muninn-minio}
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+    spec:
+      containers:
+        - name: minio
+          image: {{ .Values.minio.image | quote }}
+          args: ["server", "/data", "--console-address", ":9001"]
+          ports: [{containerPort: 9000}, {containerPort: 9001}]
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom: {secretKeyRef: {name: muninn-runtime, key: MUNINN_OBJECT_STORE_ACCESS_KEY}}
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom: {secretKeyRef: {name: muninn-runtime, key: MUNINN_OBJECT_STORE_SECRET_KEY}}
+          volumeMounts: [{name: data, mountPath: /data}]
+      volumes: [{name: data, persistentVolumeClaim: {claimName: muninn-minio}}]
+{{- end }}
+---
+{{- if .Values.nats.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: muninn-nats
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: {storage: {{ .Values.nats.storage }}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: muninn-nats
+spec:
+  selector: {app: muninn-nats}
+  ports: [{name: client, port: 4222}, {name: monitor, port: 8222}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: muninn-nats
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: muninn-nats}}
+  template:
+    metadata: {labels: {app: muninn-nats}}
+    spec:
+      containers:
+        - name: nats
+          image: {{ .Values.nats.image | quote }}
+          args: ["--jetstream", "--store_dir=/data"]
+          ports: [{containerPort: 4222}, {containerPort: 8222}]
+          volumeMounts: [{name: data, mountPath: /data}]
+      volumes: [{name: data, persistentVolumeClaim: {claimName: muninn-nats}}]
+{{- end }}

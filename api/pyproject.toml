@@ -1,0 +1,80 @@
+[project]
+name = "muninn"
+version = "0.1.0"
+description = "Offline-first conversation capture and agent context service"
+authors = [{name = "Tucker Beck", email = "tucker.beck@gmail.com"}]
+readme = "README.md"
+license-files = ["LICENSE.md"]
+requires-python = ">=3.13, ~=3.13"
+dependencies = [
+    "alembic==1.14.1",
+    "auto-name-enum==4.2.0",
+    "boto3==1.36.11",
+    "click==8.1.8",
+    "fastapi==0.115.6",
+    "httpx==0.28.1",
+    "inflection==0.5.1",
+    "loguru==0.7.3",
+    "psycopg[binary]==3.2.3",
+    "py-buzz==8.1.2",
+    "pyjwt[crypto]==2.10.1",
+    "pydantic==2.13.3",
+    "pydantic-settings==2.7.1",
+    "python-multipart==0.0.20",
+    "nats-py==2.9.0",
+    "sqlalchemy==2.0.37",
+    "uvicorn==0.34.0",
+    "snick>=3.2.0",
+]
+
+[project.urls]
+homepage = "https://github.com/dusktreader/muninn"
+source = "https://github.com/dusktreader/muninn"
+
+[project.scripts]
+muninn-job-manager = "muninn.job_manager.main:main"
+muninn-worker = "muninn.worker.main:main"
+
+[dependency-groups]
+dev = [
+    "debugpy==1.8.12",
+    "ipython==8.32.0",
+    "pytest==8.3.4",
+    "pytest-cov==6.0.0",
+    "pytest-mock==3.14.0",
+    "pytest-pretty==1.2.0",
+    "ruff==0.9.7",
+    "testcontainers==4.10.0",
+    "ty==0.0.75",
+    "typos==1.29.10",
+]
+
+[tool.uv]
+package = true
+
+[tool.pytest.ini_options]
+addopts = ["--cov=src/muninn", "--cov-report=term-missing", "--cov-report=xml:../.coverage.xml"]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+markers = [
+    "unit: fast tests that do not require external services",
+    "integration: tests that exercise local service dependencies and free Zen models",
+    "e2e: end-to-end tests that exercise the complete local application",
+]
+
+[tool.ruff]
+line-length = 120
+src = ["src/muninn", "tests"]
+
+[tool.ruff.lint]
+ignore = ["B008"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.typos.default]
+extend-ignore-identifiers-re = ["ane_auto"]
+
+[build-system]
+requires = ["uv-build>=0.1.0"]
+build-backend = "uv_build"

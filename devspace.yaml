@@ -1,0 +1,64 @@
+version: v2beta1
+name: muninn
+vars:
+  MUNINN_OIDC_ISSUER_URL:
+    source: env
+    default: http://localhost:8180/realms/master
+  MUNINN_OIDC_JWKS_URL:
+    source: env
+    default: http://muninn-keycloak.muninn-local.svc.cluster.local:8080/realms/master/protocol/openid-connect/certs
+  MUNINN_OIDC_AUDIENCE:
+    source: env
+    default: muninn-api
+  MUNINN_OIDC_CLIENT_ID:
+    source: env
+    default: muninn-web
+  MUNINN_PUBLIC_HOSTNAME:
+    source: env
+    default: muninn.localhost
+profiles:
+  - name: local
+    patches:
+      - op: replace
+        path: deployments.api.helm.values.provider.mode
+        value: assemblyai
+deployments:
+  keycloak:
+    kubectl:
+      manifests:
+        - infra/dev/keycloak/keycloak.yaml
+  api:
+    helm:
+      chart:
+        name: ./infra/helm/muninn
+      values:
+        environment: local
+        auth:
+          mode: oidc
+        keycloak:
+          issuerUrl: ${MUNINN_OIDC_ISSUER_URL}
+          jwksUrl: ${MUNINN_OIDC_JWKS_URL}
+          audience: ${MUNINN_OIDC_AUDIENCE}
+          clientId: ${MUNINN_OIDC_CLIENT_ID}
+        provider:
+          mode: fake
+        global:
+          publicHostname: ${MUNINN_PUBLIC_HOSTNAME}
+        postgresql:
+          authMethod: trust
+images:
+  muninn:
+    image: muninn:latest
+    dockerfile: api/Dockerfile
+    context: .
+dev:
+  api:
+    labelSelector:
+      app: muninn-api
+    ports:
+      - port: "5000:5000"
+  keycloak:
+    labelSelector:
+      app: muninn-keycloak
+    ports:
+      - port: "8180:8080"
